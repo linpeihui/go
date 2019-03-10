@@ -1,12 +1,12 @@
-#golang practice
+# golang + postgreSQL practice
 
-##题目
+## 题目
 两个用户匹配（liked, disliked, matched）
 
-##思路
+## 思路
 通过 PostgreSQL 数据库层面防止并发
 
-##表结构
+## 表结构
 - user_info (用户信息表)   
 ```
    Column    |              Type              | Collation | Nullable |                Default
