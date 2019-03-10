@@ -104,8 +104,8 @@ func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.
 	checkErr(err)
 	rows2, err := db.Query("SELECT user_id, other_user_state, user_state FROM relationships WHERE other_user_id = $1", userId)
 	checkErr(err)
-	generateRelationshipslice(rows1, &relationshipList)
-	generateRelationshipslice(rows2, &relationshipList)
+	generateRelationshipList(rows1, &relationshipList)
+	generateRelationshipList(rows2, &relationshipList)
 
 	b, err := json.Marshal(relationshipList)
 	if err != nil {
@@ -151,7 +151,7 @@ func addOrUpdateRelationships(w http.ResponseWriter, r *http.Request, ps httprou
 	fmt.Fprintf(w, "%s", string(b))
 }
 
-func generateRelationshipslice(rows *sql.Rows, r *RelationshipList) {
+func generateRelationshipList(rows *sql.Rows, r *RelationshipList) {
 	for rows.Next() {
 		var userId int
 		var userState int
