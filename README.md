@@ -11,7 +11,7 @@
 ```
    Column    |              Type              | Collation | Nullable |                Default
 -------------+--------------------------------+-----------+----------+---------------------------------------
- id          | integer                        |           | not null | nextval('user_info_id_seq'::regclass)
+ id          | bigint                        |           | not null | nextval('user_info_id_seq'::regclass)
  user_name   | character varying(64)          |           | not null |
  create_time | timestamp(0) without time zone |           |          | CURRENT_TIMESTAMP
 Indexes:
