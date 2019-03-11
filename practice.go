@@ -44,7 +44,7 @@ const (
 	RELATIONSHIP_TYPE  = "relationship"
 )
 
-var DB *sql.DB
+var db *sql.DB
 
 /**
  * 获取所有用户
@@ -53,7 +53,7 @@ func getusers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	recovery()
 	var u UserList
 	//查询数据
-	rows, err := DB.Query("SELECT id, user_name FROM user_info")
+	rows, err := db.Query("SELECT id, user_name FROM user_info")
 	checkErr(err)
 	defer rows.Close()
 	for rows.Next() {
@@ -82,7 +82,7 @@ func adduser(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var u UserInfo
 	json.Unmarshal(body, &u)
 	var lastInsertId string
-	err = DB.QueryRow("INSERT INTO user_info(user_name) VALUES($1) returning id;", u.Name).Scan(&lastInsertId)
+	err = db.QueryRow("INSERT INTO user_info(user_name) VALUES($1) returning id;", u.Name).Scan(&lastInsertId)
 	checkErr(err)
 	u.Id = lastInsertId
 	u.Type = USER_TYPE
@@ -100,10 +100,10 @@ func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.
 	userId := ps.ByName("user_id")
 	var relationshipList RelationshipList
 	//查询数据
-	rows1, err := DB.Query("SELECT other_user_id, user_state, other_user_state FROM relationships WHERE user_id = $1", userId)
+	rows1, err := db.Query("SELECT other_user_id, user_state, other_user_state FROM relationships WHERE user_id = $1", userId)
 	checkErr(err)
 	rows1.Close()
-	rows2, err := DB.Query("SELECT user_id, other_user_state, user_state FROM relationships WHERE other_user_id = $1", userId)
+	rows2, err := db.Query("SELECT user_id, other_user_state, user_state FROM relationships WHERE other_user_id = $1", userId)
 	checkErr(err)
 	rows2.Close()
 	generateRelationshipList(rows1, &relationshipList)
@@ -140,11 +140,11 @@ func addOrUpdateRelationships(w http.ResponseWriter, r *http.Request, ps httprou
 
 	var lastInsertId string
 	if userId < otherUserId {
-		err := DB.QueryRow("INSERT INTO relationships(user_id, other_user_id, user_state) VALUES($1, $2, $3)"+
+		err := db.QueryRow("INSERT INTO relationships(user_id, other_user_id, user_state) VALUES($1, $2, $3)"+
 			"ON CONFLICT (user_id, other_user_id) DO UPDATE SET user_state = $3 returning id;", userId, otherUserId, userState).Scan(&lastInsertId)
 		checkErr(err)
 	} else {
-		err := DB.QueryRow("INSERT INTO relationships(user_id, other_user_id, other_user_state) VALUES($1, $2, $3)"+
+		err := db.QueryRow("INSERT INTO relationships(user_id, other_user_id, other_user_state) VALUES($1, $2, $3)"+
 			"ON CONFLICT (user_id, other_user_id) DO UPDATE SET other_user_state = $3 returning id;", otherUserId, userId, userState).Scan(&lastInsertId)
 		checkErr(err)
 	}
@@ -189,16 +189,17 @@ func recovery() {
 }
 
 func main() {
-	dbTmp, err := sql.Open("postgres", "user=postgres password=123456 dbname=postgres sslmode=disable")
+	var err error
+	db, err = sql.Open("postgres", "user=postgres password=123456 dbname=postgres sslmode=disable")
 	checkErr(err)
-	dbTmp.SetMaxOpenConns(60)
-	dbTmp.SetMaxIdleConns(20)
-	DB = dbTmp
+	db.SetMaxOpenConns(60)
+	db.SetMaxIdleConns(20)
+	
 	router := httprouter.New()
 	router.GET("/users", getusers)
 	router.POST("/users", adduser)
 	router.GET("/users/:user_id/relationships", getUserRelationships)
 	router.PUT("/users/:user_id/relationships/:other_user_id", addOrUpdateRelationships)
 
-	log.Println(http.ListenAndServe(":9093", router))
+	log.Info(http.ListenAndServe(":9093", router))
 }
