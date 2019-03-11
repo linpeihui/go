@@ -125,6 +125,7 @@ func addOrUpdateRelationships(w http.ResponseWriter, r *http.Request, ps httprou
 	recovery()
 	userId, err := strconv.Atoi(ps.ByName("user_id"))
 	otherUserId, err := strconv.Atoi(ps.ByName("other_user_id"))
+	//TODO 校验用户是否存在
 	body, err := ioutil.ReadAll(r.Body)
 	checkErr(err)
 	var s RelationshipState
