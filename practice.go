@@ -7,7 +7,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	_ "github.com/lib/pq"
 	"io/ioutil"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strconv"
 )
@@ -66,7 +66,8 @@ func getusers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	//转换成json格式
 	b, err := json.Marshal(u)
 	if err != nil {
-		log.Fatalf("json err:", err)
+		log.Errorf("getusers json err: %v", err)
+		return
 	}
 	fmt.Fprintf(w, "%s", string(b))
 }
@@ -110,7 +111,8 @@ func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.
 
 	b, err := json.Marshal(relationshipList)
 	if err != nil {
-		log.Fatalf("json err:", err)
+		log.Errorf("getUserRelationships. json err: %v", err)
+		return
 	}
 	fmt.Fprintf(w, "%s", string(b))
 }
@@ -172,14 +174,15 @@ func generateRelationshipList(rows *sql.Rows, r *RelationshipList) {
 
 func checkErr(err error) {
 	if err != nil {
-		log.Fatalf("err : %v", err)
+		log.Errorf("checkErr. err: %v", err)
+		return
 	}
 }
 
 func recovery() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println(err)
+			log.Errorf("recovery. err: %v", err)
 		}
 	}()
 }
