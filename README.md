@@ -14,7 +14,7 @@
  id          | bigint                        |           | not null | nextval('user_info_id_seq'::regclass)
  user_name   | character varying(64)          |           | not null |
  create_time | timestamp(0) without time zone |           |          | CURRENT_TIMESTAMP
- update_time | timestamp(0) without time zone |           |          | CURRENT_TIMESTAMP
+ update_time | timestamp(0) without time zone |           |          | 
 Indexes:
     "user_info_pkey" PRIMARY KEY, btree (id)
 ``` 
@@ -30,7 +30,7 @@ Indexes:
  user_state       | integer                        |           |          | 0
  other_user_state | integer                        |           |          | 0
  create_time      | timestamp(0) without time zone |           |          | CURRENT_TIMESTAMP
- create_time      | timestamp(0) without time zone |           |          | CURRENT_TIMESTAMP
+ update_time      | timestamp(0) without time zone |           |          | 
 Indexes:
     "relationship_pkey" PRIMARY KEY, btree (id)
     "uniq_related_users" UNIQUE, btree (user_id, other_user_id)
