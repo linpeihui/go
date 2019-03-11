@@ -45,7 +45,7 @@ const (
 var DB *sql.DB
 
 /**
-  获取所有用户
+ * 获取所有用户
  */
 func getusers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	recovery()
