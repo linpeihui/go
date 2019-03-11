@@ -40,6 +40,8 @@ const (
 	DISLIKED = -1
 	UNKNOWN  = 0
 	LIKED    = 1
+	USER_TYPE = "user"
+	RELATIONSHIP_TYPE  = "relationship"
 )
 
 var DB *sql.DB
@@ -82,7 +84,7 @@ func adduser(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	err = DB.QueryRow("INSERT INTO user_info(user_name) VALUES($1) returning id;", u.Name).Scan(&lastInsertId)
 	checkErr(err)
 	u.Id = lastInsertId
-	u.Type = "user"
+	u.Type = USER_TYPE
 	b, err := json.Marshal(u)
 	checkErr(err)
 	fmt.Fprintf(w, "%s", string(b))
@@ -143,7 +145,7 @@ func addOrUpdateRelationships(w http.ResponseWriter, r *http.Request, ps httprou
 			"ON CONFLICT (user_id, other_user_id) DO UPDATE SET other_user_state = $3 returning id;", otherUserId, userId, userState).Scan(&lastInsertId)
 		checkErr(err)
 	}
-	var relation = RelationShip{UserId: userId, State: s.State, Type: "relationship"}
+	var relation = RelationShip{UserId: userId, State: s.State, Type: RELATIONSHIP_TYPE}
 	b, err := json.Marshal(relation)
 	checkErr(err)
 	fmt.Fprintf(w, "%s", string(b))
