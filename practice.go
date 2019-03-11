@@ -48,6 +48,7 @@ var DB *sql.DB
   获取所有用户
  */
 func getusers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	recovery()
 	var u UserList
 	//查询数据
 	rows, err := DB.Query("SELECT id, user_name FROM user_info")
@@ -72,6 +73,7 @@ func getusers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
  * 添加新用户
  */
 func adduser(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	recovery()
 	body, err := ioutil.ReadAll(r.Body)
 	checkErr(err)
 	var u UserInfo
@@ -91,6 +93,7 @@ func adduser(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
  * db中 state含义 1："liked"  -1: "disliked"
  */
 func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	recovery()
 	userId := ps.ByName("user_id")
 	var relationshipList RelationshipList
 	//查询数据
@@ -115,6 +118,7 @@ func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.
  * db中 state含义 1："liked"  -1: "disliked"
  */
 func addOrUpdateRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	recovery()
 	userId, err := strconv.Atoi(ps.ByName("user_id"))
 	otherUserId, err := strconv.Atoi(ps.ByName("other_user_id"))
 	body, err := ioutil.ReadAll(r.Body)
@@ -170,6 +174,14 @@ func checkErr(err error) {
 	}
 }
 
+func recovery() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println(err)
+		}
+	}()
+}
+
 func main() {
 	dbTmp, err := sql.Open("postgres", "user=postgres password=123456 dbname=postgres sslmode=disable")
 	checkErr(err)
@@ -182,11 +194,5 @@ func main() {
 	router.GET("/users/:user_id/relationships", getUserRelationships)
 	router.PUT("/users/:user_id/relationships/:other_user_id", addOrUpdateRelationships)
 
-	defer DB.Close()
-	//defer func() {
-	//	if err := recover(); err != nil {
-	//		log.Println(err)
-	//	}
-	//}()
 	log.Println(http.ListenAndServe(":9093", router))
 }

@@ -33,3 +33,21 @@ Indexes:
     "relationship_pkey" PRIMARY KEY, btree (id)
     "uniq_related_users" UNIQUE, btree (user_id, other_user_id)
 ```    
+## 执行请求
+- List all users (GET /users)
+```$xslt
+curl -XGET "http://localhost:9093/users"
+```
+- Create a user (POST /users)
+```$xslt
+$curl -XPOST -d '{"name":"Alice"}' "http://localhost:9093/users"
+```
+- List a users all relationships  (GET /users/:user_id/relationships)
+```$xslt
+$curl -XGET "http://localhost:9093/users/11231244213/relationships"
+```
+- Create/update relationship state to another user (PUT /users/:user_id/relationships/:other_user_id)
+```$xslt
+curl -XPUT -d '{"state":"liked"}'
+"http://localhost:9093/users/11231244213/relationships/21341231231" 
+```
