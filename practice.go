@@ -252,7 +252,7 @@ func main() {
 	var err error
 	db, err = sql.Open("postgres", "user=postgres password=123456 dbname=postgres sslmode=disable")
 	if err != nil {
-		log.Errorf("checkErr. err: %v", err)
+		log.Errorf("sql.open error. %v", err)
 		return
 	}
 	db.SetMaxOpenConns(60)
