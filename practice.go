@@ -150,8 +150,8 @@ func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.
 		fmt.Fprintf(w, ERROR_RESP_MSG)
 		return
 	}
-	err1 = generateRelationshipList(rows1, &relationshipList, w)
-	err2 = generateRelationshipList(rows2, &relationshipList, w)
+	err1 = generateRelationshipList(rows1, &relationshipList)
+	err2 = generateRelationshipList(rows2, &relationshipList)
 	if err1 != nil {
 		log.Errorf("getUserRelationships. json err: %v", err1)
 		return
@@ -219,7 +219,7 @@ func addOrUpdateRelationships(w http.ResponseWriter, r *http.Request, ps httprou
 	fmt.Fprintf(w, SUCCESS_RESP_MSG_FORMAT, string(b))
 }
 
-func generateRelationshipList(rows *sql.Rows, r *RelationshipList, w http.ResponseWriter) error {
+func generateRelationshipList(rows *sql.Rows, r *RelationshipList) error {
 	for rows.Next() {
 		var userId int
 		var userState int
