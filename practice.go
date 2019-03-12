@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	_ "github.com/lib/pq"
-	"io/ioutil"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 )
@@ -37,11 +37,27 @@ type RelationshipList struct {
 }
 
 const (
-	DISLIKED = -1
-	UNKNOWN  = 0
-	LIKED    = 1
-	USER_TYPE = "user"
-	RELATIONSHIP_TYPE  = "relationship"
+	DISLIKED_INT = -1
+	UNKNOWN_INT  = 0
+	LIKED_INT    = 1
+
+	DISLIKED_STR      = "disliked"
+	MATCHED_STR       = "matched"
+	LIKED_STR         = "liked"
+	USER_TYPE         = "user"
+	RELATIONSHIP_TYPE = "relationship"
+
+	ERROR_RESP_MSG          = "{code:500}"
+	SUCCESS_RESP_MSG_FORMAT = "{code:200, data:%s}"
+
+	GET_USERS_SQL                       = "SELECT id, user_name FROM user_info"
+	ADD_USERS_SQL                       = "INSERT INTO user_info(user_name) VALUES($1) returning id;"
+	GET_RELATIONSHIPS_BY_USER_SQL       = "SELECT other_user_id, user_state, other_user_state FROM relationships WHERE user_id = $1"
+	GET_RELATIONSHIPS_BY_OTHER_USER_SQL = "SELECT user_id, other_user_state, user_state FROM relationships WHERE other_user_id = $1"
+	ADD_RELATIONSHIPS_BY_USER_SQL       = "INSERT INTO relationships(user_id, other_user_id, user_state) VALUES($1, $2, $3)" +
+		"ON CONFLICT (user_id, other_user_id) DO UPDATE SET user_state = $3 returning id;"
+	ADD_RELATIONSHIPS_BY_OTHER_USER_SQL = "INSERT INTO relationships(user_id, other_user_id, other_user_state) VALUES($1, $2, $3)" +
+		"ON CONFLICT (user_id, other_user_id) DO UPDATE SET other_user_state = $3 returning id;"
 )
 
 var db *sql.DB
@@ -50,17 +66,25 @@ var db *sql.DB
  * 获取所有用户
  */
 func getusers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	recovery()
+	defer recovery()
 	var u UserList
 	//查询数据
-	rows, err := db.Query("SELECT id, user_name FROM user_info")
-	checkErr(err)
-	defer rows.Close()
+	rows, err := db.Query(GET_USERS_SQL)
+	rows.Close()
+	if err != nil {
+		log.Errorf("checkErr. err: %v", err)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
 	for rows.Next() {
 		var id string
 		var name string
 		err = rows.Scan(&id, &name)
-		checkErr(err)
+		if err != nil {
+			log.Errorf("checkErr. err: %v", err)
+			fmt.Fprintf(w, ERROR_RESP_MSG)
+			return
+		}
 		u.Users = append(u.Users, UserInfo{Id: id, Name: name, Type: "user"})
 	}
 	//转换成json格式
@@ -69,26 +93,38 @@ func getusers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		log.Errorf("getusers json err: %v", err)
 		return
 	}
-	fmt.Fprintf(w, "%s", string(b))
+	fmt.Fprintf(w, SUCCESS_RESP_MSG_FORMAT, string(b))
 }
 
 /**
  * 添加新用户
  */
 func adduser(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	recovery()
+	defer recovery()
 	body, err := ioutil.ReadAll(r.Body)
-	checkErr(err)
+	if err != nil {
+		log.Errorf("checkErr. err: %v", err)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
 	var u UserInfo
 	json.Unmarshal(body, &u)
 	var lastInsertId string
-	err = db.QueryRow("INSERT INTO user_info(user_name) VALUES($1) returning id;", u.Name).Scan(&lastInsertId)
-	checkErr(err)
+	err = db.QueryRow(ADD_USERS_SQL, u.Name).Scan(&lastInsertId)
+	if err != nil {
+		log.Errorf("checkErr. err: %v", err)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
 	u.Id = lastInsertId
 	u.Type = USER_TYPE
 	b, err := json.Marshal(u)
-	checkErr(err)
-	fmt.Fprintf(w, "%s", string(b))
+	if err != nil {
+		log.Errorf("checkErr. err: %v", err)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
+	fmt.Fprintf(w, SUCCESS_RESP_MSG_FORMAT, string(b))
 }
 
 /**
@@ -96,25 +132,40 @@ func adduser(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
  * db中 state含义 1："liked"  -1: "disliked"
  */
 func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	recovery()
+	defer recovery()
 	userId := ps.ByName("user_id")
 	var relationshipList RelationshipList
 	//查询数据
-	rows1, err := db.Query("SELECT other_user_id, user_state, other_user_state FROM relationships WHERE user_id = $1", userId)
-	checkErr(err)
-	rows1.Close()
-	rows2, err := db.Query("SELECT user_id, other_user_state, user_state FROM relationships WHERE other_user_id = $1", userId)
-	checkErr(err)
-	rows2.Close()
-	generateRelationshipList(rows1, &relationshipList)
-	generateRelationshipList(rows2, &relationshipList)
-
+	rows1, err1 := db.Query(GET_RELATIONSHIPS_BY_USER_SQL, userId)
+	rows2, err2 := db.Query(GET_RELATIONSHIPS_BY_OTHER_USER_SQL, userId)
+	defer rows1.Close()
+	defer rows2.Close()
+	if err1 != nil {
+		log.Errorf("checkErr. err: %v", err1)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
+	if err2 != nil {
+		log.Errorf("checkErr. err: %v", err2)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
+	err1 = generateRelationshipList(rows1, &relationshipList, w)
+	err2 = generateRelationshipList(rows2, &relationshipList, w)
+	if err1 != nil {
+		log.Errorf("getUserRelationships. json err: %v", err1)
+		return
+	}
+	if err2 != nil {
+		log.Errorf("getUserRelationships. json err: %v", err2)
+		return
+	}
 	b, err := json.Marshal(relationshipList)
 	if err != nil {
 		log.Errorf("getUserRelationships. json err: %v", err)
 		return
 	}
-	fmt.Fprintf(w, "%s", string(b))
+	fmt.Fprintf(w, SUCCESS_RESP_MSG_FORMAT, string(b))
 }
 
 /**
@@ -122,79 +173,91 @@ func getUserRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.
  * db中 state含义 1："liked"  -1: "disliked"
  */
 func addOrUpdateRelationships(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	recovery()
+	defer recovery()
 	userId, err := strconv.Atoi(ps.ByName("user_id"))
 	otherUserId, err := strconv.Atoi(ps.ByName("other_user_id"))
 	//TODO 校验用户是否存在
 	body, err := ioutil.ReadAll(r.Body)
-	checkErr(err)
+	if err != nil {
+		log.Errorf("checkErr. err: %v", err)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
 	var s RelationshipState
 	json.Unmarshal(body, &s)
 
-	var userState = UNKNOWN
-	if s.State == "liked" {
-		userState = LIKED
-	} else if s.State == "disliked" {
-		userState = DISLIKED
+	var userState = UNKNOWN_INT
+	if s.State == LIKED_STR {
+		userState = LIKED_INT
+	} else if s.State == DISLIKED_STR {
+		userState = DISLIKED_INT
 	}
 
 	var lastInsertId string
 	if userId < otherUserId {
-		err := db.QueryRow("INSERT INTO relationships(user_id, other_user_id, user_state) VALUES($1, $2, $3)"+
-			"ON CONFLICT (user_id, other_user_id) DO UPDATE SET user_state = $3 returning id;", userId, otherUserId, userState).Scan(&lastInsertId)
-		checkErr(err)
+		err := db.QueryRow(ADD_RELATIONSHIPS_BY_USER_SQL, userId, otherUserId, userState).Scan(&lastInsertId)
+		if err != nil {
+			log.Errorf("checkErr. err: %v", err)
+			fmt.Fprintf(w, ERROR_RESP_MSG)
+			return
+		}
 	} else {
-		err := db.QueryRow("INSERT INTO relationships(user_id, other_user_id, other_user_state) VALUES($1, $2, $3)"+
-			"ON CONFLICT (user_id, other_user_id) DO UPDATE SET other_user_state = $3 returning id;", otherUserId, userId, userState).Scan(&lastInsertId)
-		checkErr(err)
+		err := db.QueryRow(ADD_RELATIONSHIPS_BY_OTHER_USER_SQL, otherUserId, userId, userState).Scan(&lastInsertId)
+		if err != nil {
+			log.Errorf("checkErr. err: %v", err)
+			fmt.Fprintf(w, ERROR_RESP_MSG)
+			return
+		}
 	}
 	var relation = RelationShip{UserId: userId, State: s.State, Type: RELATIONSHIP_TYPE}
 	b, err := json.Marshal(relation)
-	checkErr(err)
-	fmt.Fprintf(w, "%s", string(b))
+	if err != nil {
+		log.Errorf("checkErr. err: %v", err)
+		fmt.Fprintf(w, ERROR_RESP_MSG)
+		return
+	}
+	fmt.Fprintf(w, SUCCESS_RESP_MSG_FORMAT, string(b))
 }
 
-func generateRelationshipList(rows *sql.Rows, r *RelationshipList) {
+func generateRelationshipList(rows *sql.Rows, r *RelationshipList, w http.ResponseWriter) error {
 	for rows.Next() {
 		var userId int
 		var userState int
 		var otherUserState int
 		var err = rows.Scan(&userId, &userState, &otherUserState)
-		checkErr(err)
+		if err != nil {
+			log.Errorf("checkErr. err: %v", err)
+			return err
+		}
 		var state string
-		if userState == DISLIKED {
-			state = "disliked"
-		} else if userState == LIKED && otherUserState == LIKED {
-			state = "matched"
-		} else if userState == LIKED {
-			state = "liked"
+		if userState == DISLIKED_INT {
+			state = DISLIKED_STR
+		} else if userState == LIKED_INT && otherUserState == LIKED_INT {
+			state = MATCHED_STR
+		} else if userState == LIKED_INT {
+			state = LIKED_STR
 		}
 		r.Relationships = append(r.Relationships, RelationShip{UserId: userId, State: state, Type: "relationship"})
 	}
-}
-
-func checkErr(err error) {
-	if err != nil {
-		log.Errorf("checkErr. err: %v", err)
-		return
-	}
+	return nil
 }
 
 func recovery() {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("recovery. err: %v", err)
-		}
-	}()
+	if err := recover(); err != nil {
+		log.Errorf("recovery. err: %v", err)
+	}
 }
 
 func main() {
 	var err error
 	db, err = sql.Open("postgres", "user=postgres password=123456 dbname=postgres sslmode=disable")
-	checkErr(err)
+	if err != nil {
+		log.Errorf("checkErr. err: %v", err)
+		return
+	}
 	db.SetMaxOpenConns(60)
 	db.SetMaxIdleConns(20)
-	
+
 	router := httprouter.New()
 	router.GET("/users", getusers)
 	router.POST("/users", adduser)
